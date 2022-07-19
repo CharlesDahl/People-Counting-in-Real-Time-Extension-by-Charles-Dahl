@@ -9,11 +9,13 @@ import numpy as np
 import argparse, imutils
 import time, dlib, cv2, datetime
 from itertools import zip_longest
+import extensionlib.extension
 
 t0 = time.time()
+load = 1
 
 def run():
-
+	
 	# construct the argument parse and parse the arguments
 	ap = argparse.ArgumentParser()
 	ap.add_argument("-p", "--prototxt", required=False,
@@ -31,6 +33,7 @@ def run():
 		help="# of skip frames between detections")
 	args = vars(ap.parse_args())
 
+
 	# initialize the list of class labels MobileNet SSD was trained to
 	# detect
 	CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
@@ -40,7 +43,7 @@ def run():
 
 	# load our serialized model from disk
 	net = cv2.dnn.readNetFromCaffe(args["prototxt"], args["model"])
-
+    
 	# if a video path was not supplied, grab a reference to the ip camera
 	if not args.get("input", False):
 		print("[INFO] Starting the live stream..")
@@ -284,15 +287,128 @@ def run():
 
 		# Initiate a simple log to save data at end of the day
 		if config.Log:
+			pathL = "Log.csv"
+			pathS = r".\extensionlib\Save.txt"
+			
+			try:
+				with open(pathS, "r") as saveFile:
+					is_empty = saveFile.read(1)
+				if is_empty == "":
+					with open(pathS, "w") as saveFile:
+						saveFile.write("0\n")
+						saveFile.write("0\n")
+			except PermissionError as PDE:
+				print(f"[INFO] PermissionDeniedError: {PDE}")
+			
 			datetimee = [datetime.datetime.now()]
 			d = [datetimee, empty1, empty, x]
 			export_data = zip_longest(*d, fillvalue = '')
 
-			with open('Log.csv', 'w', newline='') as myfile:
-				wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
-				wr.writerow(("End Time", "In", "Out", "Total Inside"))
-				wr.writerows(export_data)
+			try:
+				with open(pathL, 'w', newline='') as log:
+					wr = csv.writer(log, quoting=csv.QUOTE_ALL)
+					wr.writerow(("End Time", "In", "Out", "Total Inside"))
+					wr.writerows(export_data)
+			except PermissionError as PDE:
+				print(f"[INFO] PermissionDeniedError: {PDE}")
+
+		#Initiate day save to save data every day at specific time
+		if config.DaySave:
+			now = str(datetime.datetime.now().strftime("%H:%M:%S"))
+			if now == config.TimeDaySave:
+				if config.TimeDaySave == '00:00:00':
+					date = str(datetime.date.today()-datetime.timedelta(days=1))
+				else:
+					date = str(datetime.date.today())
 				
+				pathSD = r".\savedata\ " + date + ".csv"
+				pathSD = pathSD.replace(" ", "")
+				
+				try:
+					with open(pathSD, 'w', newline="") as daySave, open(pathL, "r") as log:
+						for x in log:
+							daySave.write(x)
+				except PermissionError as PDE:
+					print(f"[INFO] PermissionDeniedError: {PDE}")
+				
+				time.sleep(1)
+				
+				try:
+					with open(pathL, 'w'):
+						pass
+				except PermissionError as PDE:
+					print(f"[INFO] PermissionDeniedError: {PDE}")
+				
+				try:	
+					with open(pathS, "w") as saveFile:
+						saveFile.write("0\n")
+						saveFile.write("0\n")
+				except PermissionError as PDE:
+					print(f"[INFO] PermissionDeniedError: {PDE}")
+
+				totalUp = 0
+				totalDown = 0
+				x = []
+				empty = []
+				empty1 = []
+		
+		#Initiate auto save to save data from previous session
+		if config.AutoSave:
+			pathL = "Log.csv"
+			pathS = r".\extensionlib\Save.txt"
+			global load
+			
+			if load == 1:
+				try:
+					with open(pathS, "r") as saveFile:
+						totalDown = int(saveFile.readline())
+						totalUp = int(saveFile.readline())
+						x = extensionlib.extension.ListConvert(saveFile.readline())
+						empty = extensionlib.extension.ListConvert(saveFile.readline())
+						empty1 = extensionlib.extension.ListConvert(saveFile.readline())
+					load = 0
+				except PermissionError as PDE:
+					print(f"[INFO] PermissionDeniedError: {PDE}")
+			
+			datetimee = [datetime.datetime.now()]
+			d = [datetimee, empty1, empty, x]
+			export_data = zip_longest(*d, fillvalue = '')
+			
+			try:
+				with open(pathL, 'w', newline="") as log:
+					wr = csv.writer(log, quoting=csv.QUOTE_ALL)
+					wr.writerow(("End Time", "In", "Out", "Total Inside"))
+					wr.writerows(export_data)
+			except PermissionError as PDE:
+				print(f"[INFO] PermissionDeniedError: {PDE}")
+			
+			try:
+				with open(pathS, "w") as saveFile:
+					saveFile.write(f"{str(totalDown)}\n")
+					saveFile.write(f"{str(totalUp)}\n")
+					saveFile.write(f"{str(x)}\n")
+					saveFile.write(f"{str(empty)}\n")
+					saveFile.write(f"{str(empty1)}\n")
+			except PermissionError as PDE:
+				print(f"[INFO] PermissionDeniedError: {PDE}")
+
+		else:
+			datetimee = [datetime.datetime.now()]
+			d = [datetimee, empty1, empty, x]
+			export_data = zip_longest(*d, fillvalue = '')
+			
+			with open(pathS, "w") as saveFile:
+					saveFile.write("0\n")
+					saveFile.write("0\n")
+					
+			try:
+				with open(pathL, 'w', newline="") as log:
+					wr = csv.writer(log, quoting=csv.QUOTE_ALL)
+					wr.writerow(("End Time", "In", "Out", "Total Inside"))
+					wr.writerows(export_data)
+			except PermissionError as PDE:
+				print(f"[INFO] PermissionDeniedError: {PDE}")
+		
 		# check to see if we should write the frame to disk
 		if writer is not None:
 			writer.write(frame)
@@ -348,6 +464,7 @@ if config.Scheduler:
 
 	while 1:
 		schedule.run_pending()
+
 
 else:
 	run()
